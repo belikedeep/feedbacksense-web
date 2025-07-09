@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Profile {
+  id            String         @id @db.Uuid
+  email         String?
+  name          String?
+  phone         String?
+  preferences   Json?          @default("{}")
+  timezone      String?        @default("UTC")
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  activityLogs  ActivityLog[]
+  categories    Category[]
+  feedback      Feedback[]
+  feedbackNotes FeedbackNote[]
+  projects      Project[]
+
+  @@map("profiles")
+}
+
+model Project {
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String          @map("user_id") @db.Uuid
+  name          String
+  description   String?
+  businessType  String?         @map("business_type")
+  settings      Json            @default("{}")
+  isDefault     Boolean         @default(false) @map("is_default")
+  isArchived    Boolean         @default(false) @map("is_archived")
+  archivedAt    DateTime?       @map("archived_at") @db.Timestamptz(6)
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  
+  // Relationships
+  user          Profile         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feedback      Feedback[]
+  categories    Category[]
+  
+  @@unique([userId, name])
+  @@index([userId])
+  @@index([isDefault])
+  @@index([isArchived])
+  @@index([createdAt])
+  @@map("projects")
+}
+
+model Feedback {
+  id                    String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                String         @map("user_id") @db.Uuid
+  projectId             String?        @map("project_id") @db.Uuid
+  content               String
+  source                String         @default("manual")
+  category              String         @default("general")
+  sentimentScore        Decimal        @default(0.5) @map("sentiment_score") @db.Decimal(3, 2)
+  sentimentLabel        String         @default("neutral") @map("sentiment_label")
+  topics                String[]       @default([])
+  feedbackDate          DateTime       @default(dbgenerated("CURRENT_DATE")) @map("feedback_date") @db.Date
+  createdAt             DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  aiCategoryConfidence  Decimal?       @map("ai_category_confidence") @db.Decimal(3, 2)
+  aiClassificationMeta  Json?          @map("ai_classification_meta")
+  classificationHistory Json           @default("[]") @map("classification_history")
+  manualOverride        Boolean        @default(false) @map("manual_override")
+  status                String         @default("new")
+  priority              String         @default("medium")
+  isArchived            Boolean        @default(false) @map("is_archived")
+  archivedAt            DateTime?      @map("archived_at") @db.Timestamptz(6)
+  editHistory           Json           @default("[]") @map("edit_history")
+  lastEditedBy          String?        @map("last_edited_by") @db.Uuid
+  lastEditedAt          DateTime?      @map("last_edited_at") @db.Timestamptz(6)
+  user                  Profile        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project               Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  notes                 FeedbackNote[]
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([userId, projectId])
+  @@index([createdAt])
+  @@index([sentimentLabel])
+  @@index([category])
+  @@index([feedbackDate])
+  @@index([status])
+  @@index([priority])
+  @@index([isArchived])
+  @@index([feedbackDate], map: "feedback_date_idx")
+  @@map("feedback")
+}
+
+model Category {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  projectId String?  @map("project_id") @db.Uuid
+  name      String
+  color     String   @default("#3B82F6")
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user      Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId, name])
+  @@index([userId])
+  @@index([projectId])
+  @@index([userId, projectId])
+  @@map("categories")
+}
+
+model FeedbackNote {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  feedbackId String   @map("feedback_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  content    String
+  isInternal Boolean  @default(true) @map("is_internal")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  user       Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([feedbackId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("feedback_notes")
+}
+
+model ActivityLog {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  action    String
+  details   Json?
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
